@@ -116,7 +116,7 @@ def main():
     print(f"{Fore.YELLOW}Type 'exit' or 'quit' to end the conversation.")
     print(f"{Fore.YELLOW}Type 'history' to view the conversation history.")
     print(f"{Fore.YELLOW}Type 'clear' to clear the conversation history.")
-    print(f"{Fore.YELLOW}Type '/JSON' to get the appointment JSON.\n")
+    print(f"{Fore.YELLOW}Include '/JSON' in your message to get the appointment JSON.\n")
     
     while True:
         user_input = input(f"{Fore.CYAN}You: ")
@@ -125,24 +125,38 @@ def main():
             break
         elif user_input.lower() == "history":
             print_conversation_history(conversation)
+            continue
         elif user_input.lower() == "clear":
             conversation = [{"role": "system", "content": system_prompt}]
             print(f"{Fore.YELLOW}Conversation history cleared.")
-        else:
-            conversation.append({"role": "user", "content": user_input})
+            continue
+        
+        json_requested = "/json" in user_input.lower()
+        user_message = user_input ## r_input.replace("/json", "").strip()
+        
+        if user_message:
+            conversation.append({"role": "user", "content": user_message})
+        
+        ai_response = get_response(conversation)
+        
+        if json_requested and ai_response.tool_calls:
+            for tool_call in ai_response.tool_calls:
+                if isinstance(tool_call, ChatCompletionMessageToolCall) and tool_call.function.name == "get_appointment_json":
+                    json_output = json.loads(tool_call.function.arguments)
+                    print(f"{Fore.GREEN}AI: Here's the appointment JSON:")
+                    print(json.dumps(json_output, indent=2))
             
+            # Remove the last user message if it only contained /JSON
+            if not user_message:
+                conversation.pop()
+            
+            # Continue the conversation without storing the JSON interaction
+            continue_message = "Please continue our conversation."
+            conversation.append({"role": "user", "content": continue_message})
             ai_response = get_response(conversation)
-            
-            if ai_response.tool_calls:
-                for tool_call in ai_response.tool_calls:
-                    if isinstance(tool_call, ChatCompletionMessageToolCall) and tool_call.function.name == "get_appointment_json":
-                        json_output = json.loads(tool_call.function.arguments)
-                        print(f"{Fore.GREEN}AI: Here's the appointment JSON:")
-                        print(json.dumps(json_output, indent=2))
-            else:
-                print(f"{Fore.GREEN}AI: {ai_response.content}\n")
-            
-            conversation.append({"role": "assistant", "content": ai_response.content or ""})
+        
+        print(f"{Fore.GREEN}AI: {ai_response.content}\n")
+        conversation.append({"role": "assistant", "content": ai_response.content or ""})
     
     # Save the conversation to a JSON file
     if len(conversation) > 1:
