@@ -10,6 +10,8 @@ python = "^3.12"
 openai = "^1.43.0"
 colorama = "^0.4.6"
 pydantic = {extras = ["email"], version = "^2.8.2"}
+rich = "^13.8.0"
+questionary = "^2.0.1"
 
 
 [build-system]

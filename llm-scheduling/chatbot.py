@@ -7,9 +7,16 @@ from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMe
 import json
 from colorama import Fore, Style, init
 from datetime import datetime
+import textwrap
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
 
 # Initialize colorama for colored output
 init(autoreset=True)
+
+# Initialize Rich console
+console = Console()
 
 # Load your OpenAI API key from an environment variable
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -105,18 +112,38 @@ def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMe
 def print_conversation_history(conversation):
     for message in conversation[1:]:  # Skip the system message
         if message['role'] == 'user':
-            print(f"{Fore.CYAN}User: {message['content']}")
+            console.print(Panel(message['content'], title="User", border_style="cyan"))
         else:
-            print(f"{Fore.GREEN}AI: {message['content']}\n")
+            console.print(Panel(message['content'], title="AI", border_style="green"))
+        print()
+
+def display_welcome_message():
+    welcome_text = """
+    Welcome to your AI assistant powered by GPT-4!
+    
+    Commands:
+    - Type 'exit' or 'quit' to end the conversation
+    - Type 'history' to view the conversation history
+    - Type 'clear' to clear the conversation history
+    - Include '/JSON' in your message to get the appointment JSON
+    
+    Let's start chatting!
+    """
+    console.print(Panel(welcome_text, title="AI Assistant", border_style="yellow"))
+
+def display_ai_response(response):
+    wrapped_response = textwrap.fill(response, width=100)
+    console.print(Panel(wrapped_response, title="AI", border_style="green"))
+
+def display_json(json_data):
+    json_str = json.dumps(json_data, indent=2)
+    syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
+    console.print(Panel(syntax, title="Appointment JSON", border_style="magenta"))
 
 def main():
     conversation: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
     
-    print(f"{Fore.YELLOW}Welcome to your AI assistant powered by GPT-4!")
-    print(f"{Fore.YELLOW}Type 'exit' or 'quit' to end the conversation.")
-    print(f"{Fore.YELLOW}Type 'history' to view the conversation history.")
-    print(f"{Fore.YELLOW}Type 'clear' to clear the conversation history.")
-    print(f"{Fore.YELLOW}Include '/JSON' in your message to get the appointment JSON.\n")
+    display_welcome_message()
     
     while True:
         user_input = input(f"{Fore.CYAN}You: ")
@@ -128,11 +155,11 @@ def main():
             continue
         elif user_input.lower() == "clear":
             conversation = [{"role": "system", "content": system_prompt}]
-            print(f"{Fore.YELLOW}Conversation history cleared.")
+            console.print("[yellow]Conversation history cleared.")
             continue
         
         json_requested = "/json" in user_input.lower()
-        user_message = user_input ## r_input.replace("/json", "").strip()
+        user_message = user_input
         
         if user_message:
             conversation.append({"role": "user", "content": user_message})
@@ -143,28 +170,27 @@ def main():
             for tool_call in ai_response.tool_calls:
                 if isinstance(tool_call, ChatCompletionMessageToolCall) and tool_call.function.name == "get_appointment_json":
                     json_output = json.loads(tool_call.function.arguments)
-                    print(f"{Fore.GREEN}AI: Here's the appointment JSON:")
-                    print(json.dumps(json_output, indent=2))
+                    console.print("[green]AI: Here's the appointment JSON:")
+                    display_json(json_output)
             
-            # Remove the last user message if it only contained /JSON
             if not user_message:
                 conversation.pop()
             
-            # Continue the conversation without storing the JSON interaction
             continue_message = "Please continue our conversation."
             conversation.append({"role": "user", "content": continue_message})
             ai_response = get_response(conversation)
         
-        print(f"{Fore.GREEN}AI: {ai_response.content}\n")
+        display_ai_response(ai_response.content or "")
         conversation.append({"role": "assistant", "content": ai_response.content or ""})
     
     # Save the conversation to a JSON file
     if len(conversation) > 1:
-        with open('conversation.json', 'w') as json_file:
+        filename = f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, 'w') as json_file:
             json.dump(conversation, json_file, indent=4)
-        print(f"{Fore.YELLOW}Your conversation has been saved to 'conversation.json'.")
+        console.print(f"[yellow]Your conversation has been saved to '{filename}'.")
     
-    print(f"{Fore.YELLOW}Thank you for using the AI assistant. Goodbye!")
+    console.print("[yellow]Thank you for using the AI assistant. Goodbye!")
 
 if __name__ == "__main__":
     main()
