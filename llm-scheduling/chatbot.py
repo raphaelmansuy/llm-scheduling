@@ -111,6 +111,22 @@ def get_doctor_availabilities():
         }
     }
 
+def get_doctor_specialties_string():
+    doctors = {
+        "General Practitioner": ["Dr. Smith", "Dr. Johnson"],
+        "Cardiologist": ["Dr. Lee", "Dr. Garcia"],
+        "Pediatrician": ["Dr. Patel", "Dr. Brown"],
+        "Dermatologist": ["Dr. Wilson", "Dr. Taylor"],
+        "Neurologist": ["Dr. Anderson", "Dr. Thomas"]
+    }
+    
+    specialty_string = "Available Specialties and Doctors:\n"
+    for specialty, doctor_list in doctors.items():
+        specialty_string += f"\n{specialty}:\n"
+        for doctor in doctor_list:
+            specialty_string += f"  - {doctor}\n"
+    return specialty_string
+
 def mock_doctor_availabilities(specialty: str, date: str) -> dict:
     doctors = {
         "General Practitioner": ["Dr. Smith", "Dr. Johnson"],
@@ -122,8 +138,11 @@ def mock_doctor_availabilities(specialty: str, date: str) -> dict:
 
     time_slots = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"]
 
-    if specialty in doctors:
-        available_doctors = doctors[specialty]
+    # Make the specialty matching more flexible
+    matching_specialty = next((s for s in doctors.keys() if specialty.lower() in s.lower()), None)
+
+    if matching_specialty:
+        available_doctors = doctors[matching_specialty]
         available_slots = []
         for doctor in available_doctors:
             for slot in time_slots:
@@ -151,7 +170,7 @@ def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMe
             messages=messages,
             model="gpt-4o-mini",
             tools=[
-                {"type": "function", "function": get_appointment_json()},
+                {"type": "function","function": get_appointment_json()},
                 {"type": "function", "function": get_doctor_availabilities()}
             ],
             tool_choice="auto"
@@ -168,18 +187,18 @@ def print_conversation_history(conversation):
             console.print(Panel(message['content'], title="AI", border_style="green"))
         elif message['role'] == 'function':
             console.print(Panel(message['content'], title="Function", border_style="yellow"))
-        print()
+    print()
 
 def display_welcome_message():
     welcome_text = """
     Welcome to your AI assistant powered by GPT-4!
-    
+
     Commands:
     - Type 'exit' or 'quit' to end the conversation
     - Type 'history' to view the conversation history
     - Type 'clear' to clear the conversation history
     - Include '/JSON' in your message to get the appointment JSON
-    
+
     Let's start chatting!
     """
     console.print(Panel(welcome_text, title="AI Assistant", border_style="yellow"))
@@ -196,15 +215,16 @@ def display_json(json_data):
 def main():
     # Add the current date and time to the system prompt
     current_datetime = datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
-    updated_system_prompt = f"{system_prompt}\n\nCurrent Date and Time: {current_datetime}"
-    
+    doctor_specialties = get_doctor_specialties_string()
+    updated_system_prompt = f"{system_prompt}\n\nCurrent Date and Time: {current_datetime}\n\n{doctor_specialties}"
+
     conversation: list[ChatCompletionMessageParam] = [{"role": "system", "content": updated_system_prompt}]
-    
+
     display_welcome_message()
-    
+
     while True:
         user_input = input(f"{Fore.CYAN}You: ")
-        
+
         if user_input.lower() in ["exit", "quit"]:
             break
         elif user_input.lower() == "history":
@@ -214,15 +234,15 @@ def main():
             conversation = [{"role": "system", "content": updated_system_prompt}]
             console.print("[yellow]Conversation history cleared.")
             continue
-        
+
         json_requested = "/json" in user_input.lower()
         user_message = user_input
-        
+
         if user_message:
             conversation.append({"role": "user", "content": user_message})
-        
+
         ai_response = get_response(conversation)
-        
+
         if ai_response.tool_calls:
             for tool_call in ai_response.tool_calls:
                 if isinstance(tool_call, ChatCompletionMessageToolCall):
@@ -235,7 +255,7 @@ def main():
                         availabilities = mock_doctor_availabilities(args["specialty"], args["date"])
                         console.print("[green]AI: Here are the doctor's availabilities:")
                         display_json(availabilities)
-                        
+
                         # Inject availability information into the conversation
                         availability_info = f"For {args['specialty']} on {args['date']}, the following slots are available:\n"
                         for slot in availabilities['available_slots']:
@@ -245,24 +265,23 @@ def main():
                             "name": "get_doctor_availabilities",
                             "content": availability_info
                         })
-            
+
             if not user_message:
                 conversation.pop()
-            
-            continue_message = "Please continue our conversation, taking into account the availability information provided."
-            conversation.append({"role": "user", "content": continue_message})
-            ai_response = get_response(conversation)
-        
+                continue_message = "Please continue our conversation, taking into account the availability information provided."
+                conversation.append({"role": "user", "content": continue_message})
+                ai_response = get_response(conversation)
+
         display_ai_response(ai_response.content or "")
         conversation.append({"role": "assistant", "content": ai_response.content or ""})
-    
+
     # Save the conversation to a JSON file
     if len(conversation) > 1:
         filename = f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(filename, 'w') as json_file:
             json.dump(conversation, json_file, indent=4)
         console.print(f"[yellow]Your conversation has been saved to '{filename}'.")
-    
+
     console.print("[yellow]Thank you for using the AI assistant. Goodbye!")
 
 if __name__ == "__main__":
