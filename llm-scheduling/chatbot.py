@@ -6,7 +6,7 @@ from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
 import json
 from colorama import Fore, Style, init
-from datetime import datetime
+from datetime import datetime, timedelta
 import textwrap
 from rich.console import Console
 from rich.panel import Panel
@@ -97,12 +97,63 @@ def get_appointment_json():
         }
     }
 
+def get_doctor_availabilities():
+    return {
+        "name": "get_doctor_availabilities",
+        "description": "Get the available time slots for doctors by specialty",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "specialty": {"type": "string"},
+                "date": {"type": "string"},
+            },
+            "required": ["specialty", "date"]
+        }
+    }
+
+def mock_doctor_availabilities(specialty: str, date: str) -> dict:
+    doctors = {
+        "General Practitioner": ["Dr. Smith", "Dr. Johnson"],
+        "Cardiologist": ["Dr. Lee", "Dr. Garcia"],
+        "Pediatrician": ["Dr. Patel", "Dr. Brown"],
+        "Dermatologist": ["Dr. Wilson", "Dr. Taylor"],
+        "Neurologist": ["Dr. Anderson", "Dr. Thomas"]
+    }
+
+    time_slots = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"]
+
+    if specialty in doctors:
+        available_doctors = doctors[specialty]
+        available_slots = []
+        for doctor in available_doctors:
+            for slot in time_slots:
+                available_slots.append(f"{doctor} - {slot}")
+                if len(available_slots) >= 4:
+                    break
+            if len(available_slots) >= 4:
+                break
+        
+        return {
+            "specialty": specialty,
+            "date": date,
+            "available_slots": available_slots[:4]  # Ensure exactly 4 slots are returned
+        }
+    else:
+        return {
+            "specialty": specialty,
+            "date": date,
+            "available_slots": []
+        }
+
 def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMessage:
     try:
         chat_completion: ChatCompletion = client.chat.completions.create(
             messages=messages,
             model="gpt-4o-mini",
-            tools=[{"type": "function", "function": get_appointment_json()}],
+            tools=[
+                {"type": "function", "function": get_appointment_json()},
+                {"type": "function", "function": get_doctor_availabilities()}
+            ],
             tool_choice="auto"
         )
         return chat_completion.choices[0].message
@@ -113,8 +164,10 @@ def print_conversation_history(conversation):
     for message in conversation[1:]:  # Skip the system message
         if message['role'] == 'user':
             console.print(Panel(message['content'], title="User", border_style="cyan"))
-        else:
+        elif message['role'] == 'assistant':
             console.print(Panel(message['content'], title="AI", border_style="green"))
+        elif message['role'] == 'function':
+            console.print(Panel(message['content'], title="Function", border_style="yellow"))
         print()
 
 def display_welcome_message():
@@ -138,10 +191,14 @@ def display_ai_response(response):
 def display_json(json_data):
     json_str = json.dumps(json_data, indent=2)
     syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
-    console.print(Panel(syntax, title="Appointment JSON", border_style="magenta"))
+    console.print(Panel(syntax, title="JSON Output", border_style="magenta"))
 
 def main():
-    conversation: list[ChatCompletionMessageParam] = [{"role": "system", "content": system_prompt}]
+    # Add the current date and time to the system prompt
+    current_datetime = datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
+    updated_system_prompt = f"{system_prompt}\n\nCurrent Date and Time: {current_datetime}"
+    
+    conversation: list[ChatCompletionMessageParam] = [{"role": "system", "content": updated_system_prompt}]
     
     display_welcome_message()
     
@@ -154,7 +211,7 @@ def main():
             print_conversation_history(conversation)
             continue
         elif user_input.lower() == "clear":
-            conversation = [{"role": "system", "content": system_prompt}]
+            conversation = [{"role": "system", "content": updated_system_prompt}]
             console.print("[yellow]Conversation history cleared.")
             continue
         
@@ -166,17 +223,33 @@ def main():
         
         ai_response = get_response(conversation)
         
-        if json_requested and ai_response.tool_calls:
+        if ai_response.tool_calls:
             for tool_call in ai_response.tool_calls:
-                if isinstance(tool_call, ChatCompletionMessageToolCall) and tool_call.function.name == "get_appointment_json":
-                    json_output = json.loads(tool_call.function.arguments)
-                    console.print("[green]AI: Here's the appointment JSON:")
-                    display_json(json_output)
+                if isinstance(tool_call, ChatCompletionMessageToolCall):
+                    if tool_call.function.name == "get_appointment_json":
+                        json_output = json.loads(tool_call.function.arguments)
+                        console.print("[green]AI: Here's the appointment JSON:")
+                        display_json(json_output)
+                    elif tool_call.function.name == "get_doctor_availabilities":
+                        args = json.loads(tool_call.function.arguments)
+                        availabilities = mock_doctor_availabilities(args["specialty"], args["date"])
+                        console.print("[green]AI: Here are the doctor's availabilities:")
+                        display_json(availabilities)
+                        
+                        # Inject availability information into the conversation
+                        availability_info = f"For {args['specialty']} on {args['date']}, the following slots are available:\n"
+                        for slot in availabilities['available_slots']:
+                            availability_info += f"- {slot}\n"
+                        conversation.append({
+                            "role": "function",
+                            "name": "get_doctor_availabilities",
+                            "content": availability_info
+                        })
             
             if not user_message:
                 conversation.pop()
             
-            continue_message = "Please continue our conversation."
+            continue_message = "Please continue our conversation, taking into account the availability information provided."
             conversation.append({"role": "user", "content": continue_message})
             ai_response = get_response(conversation)
         
