@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
 from openai.types.chat.chat_completion import ChatCompletion
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall
@@ -166,13 +166,14 @@ def mock_doctor_availabilities(specialty: str, date: str) -> dict:
 
 def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMessage:
     try:
+        tools: list[ChatCompletionToolParam] = [
+            {"type": "function", "function": get_appointment_json()},
+            {"type": "function", "function": get_doctor_availabilities()}
+        ]
         chat_completion: ChatCompletion = client.chat.completions.create(
             messages=messages,
             model="gpt-4o-mini",
-            tools=[
-                {"type": "function","function": get_appointment_json()},
-                {"type": "function", "function": get_doctor_availabilities()}
-            ],
+            tools=tools,
             tool_choice="auto"
         )
         return chat_completion.choices[0].message
