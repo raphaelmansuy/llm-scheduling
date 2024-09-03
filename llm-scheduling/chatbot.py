@@ -12,6 +12,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 
+MODEL="gpt-4o-mini"
+
 # Initialize colorama for colored output
 init(autoreset=True)
 
@@ -153,9 +155,12 @@ def mock_doctor_availabilities(specialty: str, date: str) -> dict:
                 break
         
         return {
-            "specialty": specialty,
+            "specialty": matching_specialty,
             "date": date,
-            "available_slots": available_slots[:4]  # Ensure exactly 4 slots are returned
+            "available_slots": [
+                {"doctor": slot.split(" - ")[0], "time": slot.split(" - ")[1]}
+                for slot in available_slots[:4]
+            ]
         }
     else:
         return {
@@ -167,12 +172,18 @@ def mock_doctor_availabilities(specialty: str, date: str) -> dict:
 def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMessage:
     try:
         tools: list[ChatCompletionToolParam] = [
-            {"type": "function", "function": get_appointment_json()},
-            {"type": "function", "function": get_doctor_availabilities()}
+            {
+                "type": "function",
+                "function": get_appointment_json()
+            },
+            {
+                "type": "function",
+                "function": get_doctor_availabilities()
+            }
         ]
         chat_completion: ChatCompletion = client.chat.completions.create(
             messages=messages,
-            model="gpt-4o-mini",
+            model= MODEL,  # Updated to a valid model name
             tools=tools,
             tool_choice="auto"
         )
@@ -257,21 +268,41 @@ def main():
                         console.print("[green]AI: Here are the doctor's availabilities:")
                         display_json(availabilities)
 
-                        # Inject availability information into the conversation
-                        availability_info = f"For {args['specialty']} on {args['date']}, the following slots are available:\n"
+                        # Format availability information for the AI
+                        availability_info = (
+                            f"For {availabilities['specialty']} on {availabilities['date']}, "
+                            f"the following slots are available:\n"
+                        )
                         for slot in availabilities['available_slots']:
-                            availability_info += f"- {slot}\n"
+                            availability_info += f"- {slot['doctor']} at {slot['time']}\n"
+
+                        # Add availability info to the conversation
                         conversation.append({
                             "role": "function",
                             "name": "get_doctor_availabilities",
-                            "content": availability_info
+                            "content": json.dumps(availabilities)
                         })
 
-            if not user_message:
-                conversation.pop()
-                continue_message = "Please continue our conversation, taking into account the availability information provided."
-                conversation.append({"role": "user", "content": continue_message})
-                ai_response = get_response(conversation)
+                        # Ask AI to reformulate the availability information
+                        reformulate_prompt = (
+                            "Please reformulate the doctor availability information in plain English, "
+                            "making it easy for the user to understand. Include all relevant details "
+                            "such as the specialty, date, and available time slots with doctor names."
+                        )
+                        conversation.append({"role": "user", "content": reformulate_prompt})
+
+                        # Get AI's reformulated response
+                        ai_response = get_response(conversation)
+                        display_ai_response(ai_response.content or "")
+                        conversation.append({"role": "assistant", "content": ai_response.content or ""})
+
+            # Continue the conversation
+            continue_message = (
+                "Please continue our conversation, taking into account "
+                "the availability information provided."
+            )
+            conversation.append({"role": "user", "content": continue_message})
+            ai_response = get_response(conversation)
 
         display_ai_response(ai_response.content or "")
         conversation.append({"role": "assistant", "content": ai_response.content or ""})
