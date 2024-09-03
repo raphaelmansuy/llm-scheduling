@@ -28,6 +28,9 @@ with open('task/prompt.md', 'r') as file:
     system_prompt = file.read()
 
 def get_appointment_json():
+    """
+    Generate a JSON object containing all relevant appointment information.
+    """
     return {
         "name": "get_appointment_json",
         "description": "Generate a JSON object containing all relevant appointment information",
@@ -100,6 +103,9 @@ def get_appointment_json():
     }
 
 def get_doctor_availabilities():
+    """
+    Get the available time slots for doctors by specialty.
+    """
     return {
         "name": "get_doctor_availabilities",
         "description": "Get the available time slots for doctors by specialty",
@@ -130,6 +136,9 @@ def get_doctor_specialties_string():
     return specialty_string
 
 def mock_doctor_availabilities(specialty: str, date: str) -> dict:
+    """
+    Mock function to simulate doctor availabilities based on specialty and date.
+    """
     doctors = {
         "General Practitioner": ["Dr. Smith", "Dr. Johnson"],
         "Cardiologist": ["Dr. Lee", "Dr. Garcia"],
@@ -170,6 +179,9 @@ def mock_doctor_availabilities(specialty: str, date: str) -> dict:
         }
 
 def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMessage:
+    """
+    Get a response from the AI based on the conversation history.
+    """
     try:
         tools: list[ChatCompletionToolParam] = [
             {
@@ -192,6 +204,9 @@ def get_response(messages: list[ChatCompletionMessageParam]) -> ChatCompletionMe
         return ChatCompletionMessage(role="assistant", content=f"Error: {str(e)}")
 
 def print_conversation_history(conversation):
+    """
+    Print the conversation history to the console.
+    """
     for message in conversation[1:]:  # Skip the system message
         if message['role'] == 'user':
             console.print(Panel(message['content'], title="User", border_style="cyan"))
@@ -202,6 +217,9 @@ def print_conversation_history(conversation):
     print()
 
 def display_welcome_message():
+    """
+    Display a welcome message to the user.
+    """
     welcome_text = """
     Welcome to your AI assistant powered by GPT-4!
 
@@ -216,15 +234,24 @@ def display_welcome_message():
     console.print(Panel(welcome_text, title="AI Assistant", border_style="yellow"))
 
 def display_ai_response(response):
+    """
+    Display the AI's response in a formatted manner.
+    """
     wrapped_response = textwrap.fill(response, width=100)
     console.print(Panel(wrapped_response, title="AI", border_style="green"))
 
 def display_json(json_data):
+    """
+    Display JSON data in a formatted manner.
+    """
     json_str = json.dumps(json_data, indent=2)
     syntax = Syntax(json_str, "json", theme="monokai", line_numbers=True)
     console.print(Panel(syntax, title="JSON Output", border_style="magenta"))
 
 def main():
+    """
+    Main function to run the chatbot application.
+    """
     # Add the current date and time to the system prompt
     current_datetime = datetime.now().strftime("%A, %B %d, %Y %I:%M %p")
     doctor_specialties = get_doctor_specialties_string()
