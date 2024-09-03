@@ -32,13 +32,10 @@ For a detailed problem statement, please refer to the [PROBLEM_STATEMENT.md](tas
 - 🗣️ Natural language processing for conversational interactions
 - 📊 Dynamic information gathering from patients
 - 🕒 Real-time availability checking for doctors and specialties
-- 🚑 Intelligent routing for urgent cases
 - 🌐 Multilingual support
 - 🔒 HIPAA-compliant data handling
 - 📅 Appointment confirmation and instructions
 - 🚗 Integration with additional services (e.g., parking information, pre-appointment tests)
-- 🔔 Automated reminder system
-- 📈 Feedback collection for continuous improvement
 
 ## 🛠️ Technologies Used
 
